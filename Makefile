@@ -1,11 +1,11 @@
 TARGET_DIR = target
+PROVING_UTILS_REV=efbaeebfdce3463aa61e16d7d8e6069f03df0994
 
-install-cairo-prove:
-	RUSTFLAGS="-C target-cpu=native -C opt-level=3" \
-		cargo install \
-			--git https://github.com/starkware-libs/stwo-cairo \
-			--rev adc68829b0e913d5a8bdf14932a45fde27a2e335 \
-			cairo-prove
+install-stwo-run-and-prove:
+	cargo +nightly-2025-07-14 install \
+		--git ssh://git@github.com/m-kus/proving-utils.git \
+		--rev $(PROVING_UTILS_REV) \
+		stwo_run_and_prove --force
 
 falcon-execute:
 	rm -rf $(TARGET_DIR)/execute/falcon \
@@ -19,14 +19,14 @@ falcon-args:
 falcon-build:
 	scarb --profile release build --package falcon
 
-falcon-prove: falcon-build
-	rm -rf $(TARGET_DIR)/execute/falcon
-	mkdir -p $(TARGET_DIR)/execute/falcon
-	cairo-prove prove \
-		$(TARGET_DIR)/release/falcon.executable.json \
-		$(TARGET_DIR)/execute/falcon/proof.json \
-		--arguments-file packages/falcon/tests/data/args_512_1.json \
-		--proof-format cairo-serde
+falcon-prove:
+	stwo_run_and_prove \
+		--program resources/simple_bootloader_compiled.json \
+		--program_input packages/falcon/proving_task.json \
+		--prover_params_json prover_params.json \
+		--proofs_dir $(TARGET_DIR) \
+		--proof-format cairo-serde \
+		--verify
 
 falcon-burn:
 	scarb burn --package falcon \
@@ -52,11 +52,11 @@ sphincs-burn: sphincs-build
 		--arguments-file packages/sphincs-plus/tests/data/sha2_simple_128s.json \
 		--open-in-browser
 
-sphincs-prove: sphincs-build
-	rm -rf $(TARGET_DIR)/execute/sphincs_plus
-	mkdir -p $(TARGET_DIR)/execute/sphincs_plus
-	cairo-prove prove \
-		$(TARGET_DIR)/release/sphincs_plus.executable.json \
-		$(TARGET_DIR)/execute/sphincs_plus/proof.json \
-		--arguments-file packages/sphincs-plus/tests/data/sha2_simple_128s.json \
-		--proof-format cairo-serde
+sphincs-prove:
+	stwo_run_and_prove \
+		--program resources/simple_bootloader_compiled.json \
+		--program_input packages/sphincs-plus/proving_task.json \
+		--prover_params_json prover_params.json \
+		--proofs_dir $(TARGET_DIR) \
+		--proof-format cairo-serde \
+		--verify

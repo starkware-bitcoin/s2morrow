@@ -26,12 +26,12 @@ pub struct Args {
 fn main(args: Args) {
     let Args { pk, sig, message } = args;
     let res = sphincs::verify_128s(message.span(), sig, pk);
-    // TODO: generate a valid signature for blake_hash
     check_result(res);
 }
 
 #[cfg(feature: "blake_hash")]
-fn check_result(res: bool) {}
+fn check_result(res: bool) { // TODO: generate a valid signature for blake_hash
+}
 
 #[cfg(not(feature: "blake_hash"))]
 fn check_result(res: bool) {

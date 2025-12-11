@@ -31,6 +31,12 @@ pub fn hash_update(ref state: HashState, mut data: Span<u32>) {
     state.byte_len += data_len * 4;
 }
 
+/// Updates the SHA-256 hasher state with the given data (data length must be a multiple of 16).
+pub fn hash_update_block(ref state: HashState, data: [u32; 16]) {
+    state.byte_len += 64;
+    state.h = sha256_inner(data.span(), state.h);
+}
+
 /// Finalizes the SHA-256 hasher state and returns the hash.
 ///
 /// Adds padding to the input array for SHA-256. The padding is defined as follows:

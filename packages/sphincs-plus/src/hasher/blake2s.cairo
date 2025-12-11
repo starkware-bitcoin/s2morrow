@@ -28,6 +28,15 @@ pub fn hash_init(ref state: HashState) {
     state.byte_len = 0;
 }
 
+pub fn hash_update_block(ref state: HashState, data: [u32; 16]) {
+    state.byte_len += 64;
+    state.h = blake2s_compress(state.h, state.byte_len, BoxImpl::new(data));
+}
+
+pub fn hash_finalize_block(ref state: HashState, data: [u32; 16]) -> [u32; 8] {
+    blake2s_finalize(state.h, state.byte_len + 64, BoxImpl::new(data)).unbox()
+}
+
 /// Updates the Blake2s hasher state with the given data (data length must be a multiple of 16).
 pub fn hash_update(ref state: HashState, mut data: Span<u32>) {
     while let Some(chunk) = data.multi_pop_front::<16>() {
@@ -59,13 +68,13 @@ pub fn hash_finalize(
         buffer.append(last_input_word * 0x100);
     }
 
+    state.byte_len += buffer.len() * 4;
+
     for _ in buffer.len()..16 {
         buffer.append(0);
     }
 
     let msg = buffer.span().try_into().expect('Cast to @Blake2sInput failed');
-    state.byte_len += 64;
-
     let res = blake2s_finalize(state.h, state.byte_len, *msg);
     res.unbox()
 }

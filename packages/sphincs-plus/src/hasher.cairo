@@ -8,11 +8,11 @@ mod sha256;
 
 // Cairo-friendly hash function (custom AIR in Stwo)
 #[cfg(feature: "blake_hash")]
-pub use blake2s::{HashState, hash_finalize, hash_init, hash_update};
+pub use blake2s::{HashState, hash_finalize, hash_init, hash_update, hash_update_block};
 
 // Default hash function according to the sha256-128s parameters.
 #[cfg(not(feature: "blake_hash"))]
-pub use sha256::{HashState, hash_finalize, hash_init, hash_update};
+pub use sha256::{HashState, hash_finalize, hash_init, hash_update, hash_update_block};
 
 // Imports.
 use crate::address::{Address, AddressTrait, AddressType};
@@ -32,13 +32,10 @@ pub struct SpxCtx {
 /// This initializes state_seeded and state_seeded_512, which can then be
 /// reused input thash
 pub fn initialize_hash_function(pk_seed: HashOutput) -> SpxCtx {
-    let mut data = pk_seed.span().into();
-    data.append_span(array![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].span());
-
     let mut state: HashState = Default::default();
+    let [a, b, c, d] = pk_seed;
     hash_init(ref state);
-    hash_update(ref state, data.span());
-
+    hash_update_block(ref state, [a, b, c, d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     SpxCtx { state_seeded: state }
 }
 

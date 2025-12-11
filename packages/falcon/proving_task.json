@@ -1,0 +1,9 @@
+{
+    "single_page": true,
+    "tasks": [{
+        "type": "Cairo1Executable",
+        "path": "target/release/falcon.executable.json",
+        "program_hash_function": "blake",
+        "user_args_file": "packages/falcon/tests/data/args_512_1.json"
+    }]
+}
