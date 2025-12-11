@@ -11,20 +11,20 @@ use crate::params_128s::{SPX_D, SPX_DGST_BYTES, SPX_TREE_HEIGHT};
 use crate::word_array::{WordArrayTrait, WordSpan, WordSpanTrait};
 use crate::wots::{WotsSignature, WotsSignatureDefault, WotsSignatureSerde, wots_pk_from_sig};
 
-#[derive(Drop, Serde, Default)]
+#[derive(Drop, Serde, Default, Copy)]
 pub struct SphincsSignature {
     pub randomizer: HashOutput,
     pub fors_sig: ForsSignature,
     pub wots_merkle_sig_list: [WotsMerkleSignature; SPX_D],
 }
 
-#[derive(Drop, Serde, Default)]
+#[derive(Drop, Serde, Default, Copy)]
 pub struct SphincsPublicKey {
     pub pk_seed: HashOutput,
     pub pk_root: HashOutput,
 }
 
-#[derive(Drop, Serde, Default)]
+#[derive(Drop, Serde, Default, Copy)]
 pub struct WotsMerkleSignature {
     pub wots_sig: WotsSignature,
     pub auth_path: [HashOutput; SPX_TREE_HEIGHT],
