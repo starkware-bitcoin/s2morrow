@@ -8,7 +8,9 @@ mod sha256;
 
 // Cairo-friendly hash function (custom AIR in Stwo)
 #[cfg(feature: "blake_hash")]
-pub use blake2s::{HashState, hash_finalize, hash_init, hash_update, hash_update_block};
+pub use blake2s::{
+    HashState, hash_finalize, hash_finalize_block, hash_init, hash_update, hash_update_block,
+};
 
 // Default hash function according to the sha256-128s parameters.
 #[cfg(not(feature: "blake_hash"))]
@@ -39,10 +41,150 @@ pub fn initialize_hash_function(pk_seed: HashOutput) -> SpxCtx {
     SpxCtx { state_seeded: state }
 }
 
-/// Compute a truncated hash of the data.
-pub fn thash_128s(ctx: SpxCtx, address: @Address, input: Span<u32>) -> HashOutput {
+#[cfg(feature: "blake_hash")]
+pub fn thash_4(ctx: SpxCtx, address: @Address, data: [u32; 4]) -> HashOutput {
+    let (a0, a1, a2, a3, a4, a5, a6, a7) = address.into_components();
+    let [d0, d1, d2, d3] = data;
+    let mut state = ctx.state_seeded;
+    let [h0, h1, h2, h3, _, _, _, _] = hash_finalize_block(
+        ref state, [a0, a1, a2, a3, a4, a5, a6, a7, d0, d1, d2, d3, 0, 0, 0, 0],
+    );
+    [h0, h1, h2, h3]
+}
+
+#[cfg(not(feature: "blake_hash"))]
+pub fn thash_4(ctx: SpxCtx, address: @Address, data: [u32; 4]) -> HashOutput {
     let mut buffer = address.to_word_array();
-    buffer.append_u32_span(input);
+    buffer.append_u32_span(data.span());
+    thash_128s(ctx, address, buffer)
+}
+
+#[cfg(feature: "blake_hash")]
+pub fn thash_5(ctx: SpxCtx, address: @Address, word0: [u32; 4], word1: u32) -> HashOutput {
+    let (a0, a1, a2, a3, a4, a5, a6, a7) = address.into_components();
+    let [d0, d1, d2, d3] = word0;
+    let d4 = word1;
+    let mut state = ctx.state_seeded;
+    let [h0, h1, h2, h3, _, _, _, _] = hash_finalize_block(
+        ref state, [a0, a1, a2, a3, a4, a5, a6, a7, d0, d1, d2, d3, d4, 0, 0, 0],
+    );
+    [h0, h1, h2, h3]
+}
+
+#[cfg(not(feature: "blake_hash"))]
+pub fn thash_5(ctx: SpxCtx, address: @Address, word0: [u32; 4], word1: u32) -> HashOutput {
+    let mut buffer = address.to_word_array();
+    buffer.append_u32_span(word0.span());
+    buffer.append_u32_be(word1);
+    thash_128s(ctx, address, buffer)
+}
+
+#[cfg(feature: "blake_hash")]
+pub fn thash_8(ctx: SpxCtx, address: @Address, word0: [u32; 4], word1: [u32; 4]) -> HashOutput {
+    let (a0, a1, a2, a3, a4, a5, a6, a7) = address.into_components();
+    let [d0, d1, d2, d3] = word0;
+    let [d4, d5, d6, d7] = word1;
+    let mut state = ctx.state_seeded;
+    let [h0, h1, h2, h3, _, _, _, _] = hash_finalize_block(
+        ref state, [a0, a1, a2, a3, a4, a5, a6, a7, d0, d1, d2, d3, d4, d5, d6, d7],
+    );
+    [h0, h1, h2, h3]
+}
+
+#[cfg(not(feature: "blake_hash"))]
+pub fn thash_8(ctx: SpxCtx, address: @Address, word0: [u32; 4], word1: [u32; 4]) -> HashOutput {
+    let mut buffer = address.to_word_array();
+    buffer.append_u32_span(word0.span());
+    buffer.append_u32_span(word1.span());
+    thash_128s(ctx, address, buffer)
+}
+
+#[cfg(feature: "blake_hash")]
+pub fn thash_140(ctx: SpxCtx, address: @Address, mut data: Span<[u32; 4]>) -> HashOutput {
+    let mut state = ctx.state_seeded;
+    let (a0, a1, a2, a3, a4, a5, a6, a7) = address.into_components();
+
+    let Some(block) = data.multi_pop_front::<2>() else {
+        panic!("thash_140: expected len = 10");
+    };
+    let [w0, w1] = (*block).unbox();
+    let [d0, d1, d2, d3] = w0;
+    let [d4, d5, d6, d7] = w1;
+    hash_update_block(ref state, [a0, a1, a2, a3, a4, a5, a6, a7, d0, d1, d2, d3, d4, d5, d6, d7]);
+
+    while let Some(block) = data.multi_pop_front::<4>() {
+        let [w0, w1, w2, w3] = (*block).unbox();
+        let [d0, d1, d2, d3] = w0;
+        let [d4, d5, d6, d7] = w1;
+        let [d8, d9, d10, d11] = w2;
+        let [d12, d13, d14, d15] = w3;
+        hash_update_block(
+            ref state, [d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15],
+        );
+    }
+
+    let w0 = data.pop_front().unwrap();
+    assert(data.is_empty(), 'thash_140: expected len = 35');
+    let [d0, d1, d2, d3] = *w0;
+    let [h0, h1, h2, h3, _, _, _, _] = hash_finalize_block(
+        ref state, [d0, d1, d2, d3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    );
+    [h0, h1, h2, h3]
+}
+
+#[cfg(not(feature: "blake_hash"))]
+pub fn thash_140(ctx: SpxCtx, address: @Address, mut data: Span<[u32; 4]>) -> HashOutput {
+    let mut buffer = address.to_word_array();
+    for item in data {
+        buffer.append_u32_span(item.span());
+    }
+    thash_128s(ctx, address, buffer)
+}
+
+#[cfg(feature: "blake_hash")]
+pub fn thash_56(ctx: SpxCtx, address: @Address, data: Span<[u32; 4]>) -> HashOutput {
+    let (a0, a1, a2, a3, a4, a5, a6, a7) = address.into_components();
+    let data = data.try_into().expect('thash_btc_56: expected len = 14');
+    let [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13] = (*data).unbox();
+    let mut state = ctx.state_seeded;
+    let [d0, d1, d2, d3] = w0;
+    let [d4, d5, d6, d7] = w1;
+    let [d8, d9, d10, d11] = w2;
+    let [d12, d13, d14, d15] = w3;
+    let [d16, d17, d18, d19] = w4;
+    let [d20, d21, d22, d23] = w5;
+    let [d24, d25, d26, d27] = w6;
+    let [d28, d29, d30, d31] = w7;
+    let [d32, d33, d34, d35] = w8;
+    let [d36, d37, d38, d39] = w9;
+    let [d40, d41, d42, d43] = w10;
+    let [d44, d45, d46, d47] = w11;
+    let [d48, d49, d50, d51] = w12;
+    let [d52, d53, d54, d55] = w13;
+    hash_update_block(ref state, [a0, a1, a2, a3, a4, a5, a6, a7, d0, d1, d2, d3, d4, d5, d6, d7]);
+    hash_update_block(
+        ref state, [d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21, d22, d23],
+    );
+    hash_update_block(
+        ref state, [d24, d25, d26, d27, d28, d29, d30, d31, d32, d33, d34, d35, d36, d37, d38, d39],
+    );
+    let [h0, h1, h2, h3, _, _, _, _] = hash_finalize_block(
+        ref state, [d40, d41, d42, d43, d44, d45, d46, d47, d48, d49, d50, d51, d52, d53, d54, d55],
+    );
+    [h0, h1, h2, h3]
+}
+
+#[cfg(not(feature: "blake_hash"))]
+pub fn thash_56(ctx: SpxCtx, address: @Address, data: Span<[u32; 4]>) -> HashOutput {
+    let mut buffer = address.to_word_array();
+    for item in data {
+        buffer.append_u32_span(item.span());
+    }
+    thash_128s(ctx, address, buffer)
+}
+
+/// Compute a truncated hash of the data.
+pub fn thash_128s(ctx: SpxCtx, address: @Address, buffer: WordArray) -> HashOutput {
     let (words, last_word, last_word_len) = buffer.into_components();
     let [d0, d1, d2, d3, _, _, _, _] = hash_finalize(
         ctx.state_seeded, words, last_word, last_word_len,
@@ -109,14 +251,11 @@ pub fn compute_root(
     while let Some(hash_witness) = auth_path.pop_front() {
         let (q, r) = DivRem::div_rem(leaf_idx, 2);
 
-        let mut buffer: Array<u32> = array![];
-        if r == 0 {
-            buffer.append_span(node.span());
-            buffer.append_span(hash_witness.span());
+        let (word0, word1) = if r == 0 {
+            (node, *hash_witness)
         } else {
-            buffer.append_span(hash_witness.span());
-            buffer.append_span(node.span());
-        }
+            (*hash_witness, node)
+        };
 
         i += 1;
         leaf_idx = q;
@@ -125,7 +264,7 @@ pub fn compute_root(
         address.set_tree_height(i);
         address.set_tree_index(leaf_idx + idx_offset);
 
-        node = thash_128s(ctx, @address, buffer.span());
+        node = thash_8(ctx, @address, word0, word1);
     }
 
     node
@@ -174,7 +313,9 @@ mod tests {
         let (seed, _, _) = words_from_hex("d17096522c1d9de4e3c4c4e8659c1b86")
             .into_components(); // sk seed
 
-        let hash = thash_128s(Default::default(), @address, seed.span());
+        let mut buffer = address.to_word_array();
+        buffer.append_u32_span(seed.span());
+        let hash = thash_128s(Default::default(), @address, buffer);
         assert_eq!(hash, [2384795752, 2382117612, 736107028, 3412802428]);
     }
 
@@ -199,7 +340,9 @@ mod tests {
                 byte_len: 64,
             },
         };
-        let digest = thash_128s(ctx, @address, message.span());
+        let mut buffer = address.to_word_array();
+        buffer.append_u32_span(message.span());
+        let digest = thash_128s(ctx, @address, buffer);
         assert_eq!(digest, [629918136, 3883225718, 1150955665, 4167860371]);
     }
 

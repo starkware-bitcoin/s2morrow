@@ -5,7 +5,7 @@
 use crate::address::{Address, AddressTrait, AddressType};
 use crate::fors::{ForsSignature, fors_pk_from_sig};
 use crate::hasher::{
-    HashOutput, compute_root, hash_message_128s, initialize_hash_function, thash_128s,
+    HashOutput, compute_root, hash_message_128s, initialize_hash_function, thash_140,
 };
 use crate::params_128s::{SPX_D, SPX_DGST_BYTES, SPX_TREE_HEIGHT};
 use crate::word_array::{WordArrayTrait, WordSpan, WordSpanTrait};
@@ -85,7 +85,7 @@ pub fn verify_128s(message: WordSpan, sig: SphincsSignature, pk: SphincsPublicKe
         let wots_pk = wots_pk_from_sig(ctx, *wots_sig, root, @wots_addr);
 
         // Compute the leaf node using the WOTS public key.
-        let leaf = thash_128s(ctx, @wots_pk_addr, wots_pk.span());
+        let leaf = thash_140(ctx, @wots_pk_addr, wots_pk.span());
 
         // Compute the root node of this subtree.
         // Auth path has fixed length, so we don't need to assert tree height.

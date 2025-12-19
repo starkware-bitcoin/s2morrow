@@ -37,7 +37,10 @@ falcon-burn:
 sphincs-build:
 	scarb --profile release build --package sphincs_plus --features blake_hash,sparse_addr
 
-sphincs-execute: sphincs-build
+sphincs-build-sha2:
+	scarb --profile release build --package sphincs_plus
+
+sphincs-execute:
 	rm -rf $(TARGET_DIR)/execute/sphincs_plus
 	scarb --profile release execute \
 		--no-build \

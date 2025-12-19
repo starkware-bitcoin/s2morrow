@@ -23,6 +23,18 @@ jobs:
       - name: Run unit tests
         run: scarb test
 
+  e2e-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Scarb
+        uses: software-mansion/setup-scarb@v1.3.2
+
+      - name: Run integration test
+        run: scarb --profile release execute --package sphincs_plus --arguments-file packages/sphincs-plus/tests/data/sha2_simple_128s.json
+
   build:
     runs-on: ubuntu-latest
     steps:
