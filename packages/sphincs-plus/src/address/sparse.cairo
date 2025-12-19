@@ -18,8 +18,7 @@ pub struct Address {
     keypair: u32,
     tree_height: u32,
     tree_index: u32,
-    wots_chain_addr: u32,
-    wots_hash_addr: u32,
+    wots_addr: u32,
 }
 
 #[generate_trait]
@@ -32,8 +31,7 @@ pub impl AddressImpl of AddressTrait {
         let keypair = components.pop_front().unwrap();
         let tree_height = components.pop_front().unwrap();
         let tree_index = components.pop_front().unwrap();
-        let wots_chain_addr = components.pop_front().unwrap();
-        let wots_hash_addr = components.pop_front().unwrap();
+        let wots_addr = components.pop_front().unwrap();
         Address {
             layer,
             hypertree_addr_hi,
@@ -42,8 +40,7 @@ pub impl AddressImpl of AddressTrait {
             keypair,
             tree_height,
             tree_index,
-            wots_chain_addr,
-            wots_hash_addr,
+            wots_addr,
         }
     }
 
@@ -73,23 +70,31 @@ pub impl AddressImpl of AddressTrait {
         self.tree_index = tree_index;
     }
 
-    fn set_wots_chain_addr(ref self: Address, chain_address: u8) {
-        self.wots_chain_addr = chain_address.into();
-    }
-
-    fn set_wots_hash_addr(ref self: Address, hash_address: u8) {
-        self.wots_hash_addr = hash_address.into();
+    fn set_wots_addr(ref self: Address, address: u32) {
+        self.wots_addr = address;
     }
 
     fn to_word_array(self: @Address) -> WordArray {
         WordArrayTrait::new(
             array![
                 *self.layer, *self.hypertree_addr_hi, *self.hypertree_addr_lo, *self.address_type,
-                *self.keypair, *self.tree_height, *self.tree_index, *self.wots_chain_addr,
-                *self.wots_hash_addr,
+                *self.keypair, *self.tree_height, *self.tree_index, *self.wots_addr,
             ],
             0,
             0,
+        )
+    }
+
+    fn into_components(self: Address) -> (u32, u32, u32, u32, u32, u32, u32, u32) {
+        (
+            self.layer,
+            self.hypertree_addr_hi,
+            self.hypertree_addr_lo,
+            self.address_type,
+            self.keypair,
+            self.tree_height,
+            self.tree_index,
+            self.wots_addr,
         )
     }
 }

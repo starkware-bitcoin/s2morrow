@@ -9,7 +9,7 @@
 
 use core::traits::DivRem;
 use crate::address::{Address, AddressTrait};
-use crate::hasher::{HashOutput, HashOutputSerde, SpxCtx, thash_128s};
+use crate::hasher::{HashOutput, HashOutputSerde, SpxCtx, thash_4};
 use crate::params_128s::SPX_WOTS_LEN;
 
 /// WOTS+ signature: array of partially hashed private keys.
@@ -43,25 +43,22 @@ pub impl WotsSignatureDefault of Default<WotsSignature> {
 /// Takes a WOTS signature and an n-byte message, computes a WOTS public key.
 pub fn wots_pk_from_sig(
     ctx: SpxCtx, sig: WotsSignature, message: HashOutput, address: @Address,
-) -> Array<u32> {
-    let mut wots_addr = address.clone();
-
+) -> Array<[u32; 4]> {
     let mut lengths = base_w_128s(message.span());
     add_checksum_128s(ref lengths);
 
     let mut sig_iter = sig.span();
     let mut lengths_iter = lengths.span();
-    let mut chain_idx: u8 = 0;
+    // Use 2nd LSB for chain id
+    let mut chain_idx: u32 = 0;
     let mut pk = array![];
 
     while let Some(len) = lengths_iter.pop_front() {
-        wots_addr.set_wots_chain_addr(chain_idx);
-
         let sk = sig_iter.pop_front().unwrap();
-        let chain_pk = chain_hash_128s(ctx, *sk, *len, ref wots_addr);
-        pk.append_span(chain_pk.span());
+        let chain_pk = chain_hash_128s(ctx, *sk, *len, address, chain_idx);
+        pk.append(chain_pk);
 
-        chain_idx += 1;
+        chain_idx += 0x100;
     }
 
     pk
@@ -88,19 +85,20 @@ pub fn add_checksum_128s(ref message_w: Array<u32>) {
 /// Compute the H^{steps}(input) hash chain given the chain length (start) and return the last
 /// digest.
 pub fn chain_hash_128s(
-    ctx: SpxCtx, input: HashOutput, length: u32, ref address: Address,
+    ctx: SpxCtx, input: HashOutput, length: u32, address: @Address, chain_idx: u32,
 ) -> HashOutput {
     if length == 15 {
         return input;
     }
-    let start: u8 = length.try_into().unwrap();
-    address.set_wots_hash_addr(start);
 
-    let mut output = thash_128s(ctx, @address, input.span());
+    let mut wots_addr = address.clone();
+    wots_addr.set_wots_addr(chain_idx + length);
 
-    for i in start + 1..15 { // SPX_WOTS_W - 1
-        address.set_wots_hash_addr(i);
-        output = thash_128s(ctx, @address, output.span());
+    let mut output = thash_4(ctx, @wots_addr, input);
+
+    for i in length + 1..15 { // SPX_WOTS_W - 1
+        wots_addr.set_wots_addr(chain_idx + i);
+        output = thash_4(ctx, @wots_addr, output);
     }
     output
 }
@@ -143,7 +141,7 @@ mod tests {
     fn test_chain_hash() {
         let input = [0x01020304, 0x05060708, 0x10203040, 0x50607080];
         let mut address = Default::default();
-        let output = chain_hash_128s(Default::default(), input, 5, ref address);
+        let output = chain_hash_128s(Default::default(), input, 5, @address, 0);
         assert_eq!(output, [0x8ae6cda7, 0xa098be21, 0x7c81bb4e, 0x860dd304]);
     }
 
@@ -151,7 +149,7 @@ mod tests {
     fn test_chain_hash_2() {
         let input = [2105475624, 2804661595, 372022634, 664091526];
         let mut address = Default::default();
-        let output = chain_hash_128s(Default::default(), input, 15, ref address);
+        let output = chain_hash_128s(Default::default(), input, 15, @address, 0);
         assert_eq!(output, [2105475624, 2804661595, 372022634, 664091526]);
     }
 
@@ -159,7 +157,7 @@ mod tests {
     fn test_chain_hash_3() {
         let input = [1640362213, 3803567762, 3187702095, 90287887];
         let mut address = Default::default();
-        let output = chain_hash_128s(Default::default(), input, 9, ref address);
+        let output = chain_hash_128s(Default::default(), input, 9, @address, 0);
         assert_eq!(output, [3700563191, 1880524724, 4147099568, 1051379323]);
     }
 
@@ -218,27 +216,42 @@ mod tests {
             [813956839, 627498556, 1729900509, 740863118],
         ];
         let pk = wots_pk_from_sig(Default::default(), sig, message, Default::default());
-        let expected = array![
-            4280157821, 1513564328, 2473981278, 1876372688, 2105475624, 2804661595, 372022634,
-            664091526, 4027238432, 3872223822, 221106114, 524906229, 3752097775, 3146560125,
-            1879590184, 1636129964, 1329032692, 1000072347, 3970031369, 3872965792, 2851349356,
-            1936208600, 4116230018, 1903880740, 2354241252, 2704498587, 2531552482, 3396990295,
-            3059900203, 2253426115, 346500790, 1971047600, 1976751202, 1558561151, 2411291362,
-            3037858944, 132968461, 3575066386, 681930895, 3305151734, 3501974190, 1880654097,
-            3092213966, 779706411, 2735033803, 2191385983, 4067752648, 224793655, 1049788647,
-            3648462208, 1958295452, 3903679462, 1872779743, 1742982837, 2642993569, 1390176031,
-            2883706984, 2246101291, 2493097667, 847341441, 3420010809, 3157666235, 2622558776,
-            3462711826, 1129806005, 2397760597, 3130810852, 3502719843, 1789548901, 2313604717,
-            3151691158, 2545361183, 206247809, 265279999, 1583259327, 1865531287, 321117893,
-            852595799, 560662171, 3090666296, 3391532313, 3120352875, 1311959318, 1580968828,
-            2545213833, 1980075718, 2700738193, 961781715, 2466583066, 3293382051, 3386751889,
-            300355772, 1428415600, 3099647130, 1578840000, 3241854699, 4010338708, 3087882097,
-            2264660391, 3219392681, 1357253572, 3859712449, 3992315401, 1294093020, 530094087,
-            1229019980, 818672529, 3160378578, 3713034739, 208429519, 2762526678, 3510982306,
-            1953661473, 3878873515, 262957853, 2271901417, 3369540373, 4292115841, 2217881177,
-            640391144, 585932212, 726570137, 2030731473, 3459932845, 791428494, 3675324530,
-            3955694332, 220871188, 1568371551, 1526534631, 1313077632, 1000364894, 3919277696,
-            3303850749, 3847800427, 2719146028, 3796859057, 3744444374, 3993582049, 3262321084,
+        let expected: Array<[u32; 4]> = array![
+            [4280157821, 1513564328, 2473981278, 1876372688],
+            [2105475624, 2804661595, 372022634, 664091526],
+            [4027238432, 3872223822, 221106114, 524906229],
+            [3752097775, 3146560125, 1879590184, 1636129964],
+            [1329032692, 1000072347, 3970031369, 3872965792],
+            [2851349356, 1936208600, 4116230018, 1903880740],
+            [2354241252, 2704498587, 2531552482, 3396990295],
+            [3059900203, 2253426115, 346500790, 1971047600],
+            [1976751202, 1558561151, 2411291362, 3037858944],
+            [132968461, 3575066386, 681930895, 3305151734],
+            [3501974190, 1880654097, 3092213966, 779706411],
+            [2735033803, 2191385983, 4067752648, 224793655],
+            [1049788647, 3648462208, 1958295452, 3903679462],
+            [1872779743, 1742982837, 2642993569, 1390176031],
+            [2883706984, 2246101291, 2493097667, 847341441],
+            [3420010809, 3157666235, 2622558776, 3462711826],
+            [1129806005, 2397760597, 3130810852, 3502719843],
+            [1789548901, 2313604717, 3151691158, 2545361183],
+            [206247809, 265279999, 1583259327, 1865531287],
+            [321117893, 852595799, 560662171, 3090666296],
+            [3391532313, 3120352875, 1311959318, 1580968828],
+            [2545213833, 1980075718, 2700738193, 961781715],
+            [2466583066, 3293382051, 3386751889, 300355772],
+            [1428415600, 3099647130, 1578840000, 3241854699],
+            [4010338708, 3087882097, 2264660391, 3219392681],
+            [1357253572, 3859712449, 3992315401, 1294093020],
+            [530094087, 1229019980, 818672529, 3160378578],
+            [3713034739, 208429519, 2762526678, 3510982306],
+            [1953661473, 3878873515, 262957853, 2271901417],
+            [3369540373, 4292115841, 2217881177, 640391144],
+            [585932212, 726570137, 2030731473, 3459932845],
+            [791428494, 3675324530, 3955694332, 220871188],
+            [1568371551, 1526534631, 1313077632, 1000364894],
+            [3919277696, 3303850749, 3847800427, 2719146028],
+            [3796859057, 3744444374, 3993582049, 3262321084],
         ];
         assert_eq!(pk, expected);
     }

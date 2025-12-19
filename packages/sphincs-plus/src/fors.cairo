@@ -8,7 +8,7 @@
 
 use core::traits::DivRem;
 use crate::address::{Address, AddressTrait, AddressType};
-use crate::hasher::{HashOutput, SpxCtx, compute_root, thash_128s};
+use crate::hasher::{HashOutput, SpxCtx, compute_root, thash_4, thash_56};
 use crate::params_128s::{SPX_FORS_BASE_OFFSET, SPX_FORS_HEIGHT, SPX_FORS_TREES};
 use crate::word_array::{WordSpan, WordSpanTrait};
 
@@ -46,12 +46,12 @@ pub fn fors_pk_from_sig(
         fors_tree_addr.set_tree_index(idx_offset + leaf_idx);
 
         // Derive the leaf hash from the secret key seed and tree address.
-        let leaf = thash_128s(ctx, @fors_tree_addr, sk_seed.span());
+        let leaf = thash_4(ctx, @fors_tree_addr, sk_seed);
 
         // Derive the corresponding root node of this tree.
         // Auth path has fixed length, so we don't need to assert tree height.
         let root = compute_root(ctx, @fors_tree_addr, leaf, auth_path.span(), leaf_idx, idx_offset);
-        roots.append_span(root.span());
+        roots.append(root);
 
         idx_offset += SPX_FORS_BASE_OFFSET;
     }
@@ -60,7 +60,7 @@ pub fn fors_pk_from_sig(
     let mut fors_pk_addr = address.clone();
     fors_pk_addr.set_address_type(AddressType::FORSPK);
 
-    thash_128s(ctx, @fors_pk_addr, roots.span())
+    thash_56(ctx, @fors_pk_addr, roots.span())
 }
 
 /// Convert FORS mhash to leaves indices.

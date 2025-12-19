@@ -99,6 +99,13 @@ pub impl AddressImpl of AddressTrait {
         self.w5 = cd;
     }
 
+    fn set_wots_addr(ref self: Address, address: u32) {
+        let (abc, wots_hash_addr) = DivRem::div_rem(address, 0x100);
+        let (_, wots_chain_addr) = DivRem::div_rem(abc, 0x100);
+        self.set_wots_chain_addr(wots_chain_addr.try_into().unwrap());
+        self.set_wots_hash_addr(wots_hash_addr.try_into().unwrap());
+    }
+
     fn set_wots_chain_addr(ref self: Address, chain_address: u8) {
         // In WOTS address other bytes are not used and set to zero.
         self.w4_b = chain_address.into() * 0x10000;
@@ -114,6 +121,10 @@ pub impl AddressImpl of AddressTrait {
 
     fn to_word_array(self: @Address) -> WordArray {
         WordArrayTrait::new(array![*self.w0, *self.w1, *self.w2, *self.w3, *self.w4], *self.w5, 2)
+    }
+
+    fn into_components(self: Address) -> (u32, u32, u32, u32, u32, u32, u32, u32) {
+        (self.w0, self.w1, self.w2, self.w3, self.w4, self.w5, 0, 0)
     }
 }
 
