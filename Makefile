@@ -63,3 +63,7 @@ sphincs-prove:
 		--proofs_dir $(TARGET_DIR) \
 		--proof-format cairo-serde \
 		--verify
+
+sphincs-args:
+	cd packages/sphincs-plus/scripts && cargo +nightly run --release --example generate_cairo_data \
+		> ../tests/data/sha2_simple_128s.json
