@@ -4,6 +4,7 @@ use crate::thash::*;
 use crate::address::*;
 
 /// Converts the value of 'in' to 'outlen' bytes in big-endian byte order
+#[cfg(not(feature = "blake2s"))]
 pub fn ull_to_bytes(out: &mut[u8], outlen: usize, mut input: u64)
 {
   // Iterate over out in decreasing order, for big-endianness.
@@ -22,6 +23,7 @@ pub fn u32_to_bytes(out: &mut[u8], input: u32)
 }
 
 /// Converts the inlen bytes in 'in' from big-endian byte order to an integer.
+#[cfg(not(feature = "blake2s"))]
 pub fn bytes_to_ull(input: &[u8], inlen: usize ) -> u64
 {
   let mut retval = 0u64;
@@ -86,6 +88,7 @@ pub fn compute_root(
   thash::<2>(root, Some(&buffer), ctx, addr);
 }
 
+#[cfg(not(feature = "sparse_addr"))]
 pub fn bytes_to_address(addr: &mut[u32], bytes: &[u8; 32])
 {
   for i in 0..8 {
@@ -95,7 +98,8 @@ pub fn bytes_to_address(addr: &mut[u32], bytes: &[u8; 32])
   }
 }
 
-pub fn address_to_bytes(addr: &[u32]) -> [u8; 32] 
+#[cfg(any(not(feature = "sparse_addr"), not(feature = "blake2s")))]
+pub fn address_to_bytes(addr: &[u32]) -> [u8; 32]
 {
   let mut out = [0u8; 32];
   for i in 0..8 {
@@ -104,23 +108,32 @@ pub fn address_to_bytes(addr: &[u32]) -> [u8; 32]
   out
 }
 
+/// Convert sparse address (8 u32 words) to bytes using little-endian ordering.
+/// Used for Cairo-compatible Blake2s hashing.
+/// The bytes are in LE format, matching how blake2 crate interprets them as u32 words.
+#[cfg(feature = "sparse_addr")]
+pub fn sparse_address_to_bytes(addr: &[u32]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    for i in 0..8 {
+        out[i*4..i*4+4].copy_from_slice(&addr[i].to_le_bytes());
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  
+
   #[test]
   fn test_compute_root() {
-    let ctx = SpxCtx {
-      pub_seed: [0u8; SPX_N],
-      sk_seed: [0u8; SPX_N],
-      state_seeded: [0u8; 40],
-    };
+    let ctx = SpxCtx::default();
 
     let mut root = [0u8; SPX_N];
     let leaf = hex::decode("0b44071155fca405955b56feb2f3fda4").unwrap();
     let auth_path = hex::decode("8a270502d810bf6113b2e8e944c256b0a6b7cd8b2326ebfd4902754e48f25ea5e55a1b70839d0b34fea27c5b3b19dfa2e41d0dda0e1df57c0c22771f2e62fe43912e2fb1fef80c7a3027e0ef7536efc56340e1324d51df82783a94e1abe3c28501969094dc77240e0b67f2e6eeeccad4cf63f4245ce49b5d08297da272202490951e41e6c34bdc0940bb54c014b364be793c3dc728957a48ef50ca823d2e8cc6a8995fc49127f784c75675922e2581ed6e2599420bad7ab407d39ed79cac25e0").unwrap();
-    
+
     let mut addr = [0u32; 8];
+    #[cfg(not(feature = "sparse_addr"))]
     bytes_to_address(&mut addr, &[0u8; 32]);
 
     compute_root(&mut root, &leaf, 3308, 53248, &auth_path, 12, &ctx, &mut addr);

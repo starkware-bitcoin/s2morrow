@@ -25,6 +25,7 @@ optional = true
 
 [dev-dependencies]
 pqc_core = {version = "0.3.0", features = ["load"]}
+serde_json = "1.0"
 
 # Must enable only one from each of the groups below
 # otherwise library will throw a compilation error
@@ -32,9 +33,12 @@ pqc_core = {version = "0.3.0", features = ["load"]}
 default = ["sha2", "s128", "simple"]
 
 ### Hash ###
-haraka = []
 sha2 = ["sha256"]
 shake = ["sha3"]
+blake2s = []  # Uses built-in Blake2s implementation (no external crate)
+
+### Address Format ###
+sparse_addr = []
 
 ### Security level ###
 # Considered equivalent to 128, 192 and 256 bit

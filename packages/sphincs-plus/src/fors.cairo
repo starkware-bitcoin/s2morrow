@@ -31,6 +31,7 @@ pub fn fors_pk_from_sig(
 
     // Compute indices of leaves of the FORS trees
     let mut indices = message_to_indices_128s(mhash);
+
     // Offset for the leaves indices
     let mut idx_offset = 0;
     // FORS roots
@@ -51,6 +52,7 @@ pub fn fors_pk_from_sig(
         // Derive the corresponding root node of this tree.
         // Auth path has fixed length, so we don't need to assert tree height.
         let root = compute_root(ctx, @fors_tree_addr, leaf, auth_path.span(), leaf_idx, idx_offset);
+
         roots.append(root);
 
         idx_offset += SPX_FORS_BASE_OFFSET;

@@ -1,5 +1,6 @@
 use crate::context::SpxCtx;
-use crate::utils::*;
+#[cfg(not(feature = "blake2s"))]
+use crate::utils::ull_to_bytes;
 use crate::thash::*;
 use crate::address::*;
 use crate::params::*;
@@ -31,6 +32,7 @@ pub fn gen_chain(
 /// base_w algorithm as described in draft.
 /// Interprets an array of bytes as integers in base w.
 /// This only works when log_w is a divisor of 8.
+#[cfg(not(feature = "blake2s"))]
 pub fn base_w(output: &mut[u32], out_len: u32, input: &[u8])
 {
   let mut idx = 0;
@@ -50,7 +52,51 @@ pub fn base_w(output: &mut[u32], out_len: u32, input: &[u8])
   }
 }
 
+/// Cairo-compatible base_w for Blake2s mode.
+/// Processes input as u32 words (little-endian storage) and extracts nibbles
+/// in big-endian order within each word, matching Cairo's base_w_128s.
+#[cfg(feature = "blake2s")]
+pub fn base_w(output: &mut[u32], out_len: u32, input: &[u8])
+{
+    let num_words = (out_len as usize + 7) / 8;  // Each word gives 8 nibbles
+    let mut out_idx = 0;
+
+    for word_idx in 0..num_words {
+        // Read word as little-endian (how it's stored in memory)
+        let word = if word_idx * 4 + 4 <= input.len() {
+            u32::from_le_bytes(input[word_idx*4..word_idx*4+4].try_into().unwrap())
+        } else {
+            // Handle partial last word
+            let mut bytes = [0u8; 4];
+            let remaining = input.len() - word_idx * 4;
+            bytes[..remaining].copy_from_slice(&input[word_idx*4..]);
+            u32::from_le_bytes(bytes)
+        };
+
+        // Extract nibbles in big-endian order (MSB first), matching Cairo
+        // word = 0xAABBCCDD -> nibbles [A, A, B, B, C, C, D, D]
+        let nibbles = [
+            (word >> 28) & 0xF,  // MSB nibble
+            (word >> 24) & 0xF,
+            (word >> 20) & 0xF,
+            (word >> 16) & 0xF,
+            (word >> 12) & 0xF,
+            (word >> 8) & 0xF,
+            (word >> 4) & 0xF,
+            word & 0xF,         // LSB nibble
+        ];
+
+        for nibble in nibbles {
+            if out_idx < out_len as usize {
+                output[out_idx] = nibble;
+                out_idx += 1;
+            }
+        }
+    }
+}
+
 /// Computes the WOTS+ checksum over a message (in base_w).
+#[cfg(not(feature = "blake2s"))]
 pub fn wots_checksum(csum_base_w: &mut[u32])
 {
   let mut csum =  0u32;
@@ -69,6 +115,31 @@ pub fn wots_checksum(csum_base_w: &mut[u32])
   base_w(
     &mut csum_base_w[SPX_WOTS_LEN1..], SPX_WOTS_LEN2 as u32, &csum_bytes
   );
+}
+
+/// Cairo-compatible checksum for Blake2s mode.
+/// Directly extracts nibbles from checksum value, matching Cairo's add_checksum_128s.
+#[cfg(feature = "blake2s")]
+pub fn wots_checksum(csum_base_w: &mut[u32])
+{
+  let mut csum =  0u32;
+
+  // Compute checksum.
+  for i in 0..SPX_WOTS_LEN1  {
+    csum += SPX_WOTS_W as u32 - 1 - csum_base_w[i] as u32;
+  }
+
+  // Convert checksum to base_w nibbles directly (matching Cairo).
+  // For 128s: checksum is 12 bits, SPX_WOTS_LEN2 = 3 nibbles.
+  // Cairo does: e = csum / 256, f = (csum % 256) / 16, g = csum % 16
+  let e = csum / 0x100;
+  let fg = csum % 0x100;
+  let f = fg / 0x10;
+  let g = fg % 0x10;
+
+  csum_base_w[SPX_WOTS_LEN1] = e;
+  csum_base_w[SPX_WOTS_LEN1 + 1] = f;
+  csum_base_w[SPX_WOTS_LEN1 + 2] = g;
 }
 
 /// Takes a message and derives the matching chain lengths.

@@ -43,6 +43,14 @@ sphincs-build-sha2:
 sphincs-execute:
 	rm -rf $(TARGET_DIR)/execute/sphincs_plus
 	scarb --profile release execute \
+		--package sphincs_plus \
+		--features blake_hash,sparse_addr \
+		--print-resource-usage \
+		--arguments-file packages/sphincs-plus/tests/data/blake2s_simple_128s.json
+
+sphincs-execute-sha2: sphincs-build-sha2
+	rm -rf $(TARGET_DIR)/execute/sphincs_plus
+	scarb --profile release execute \
 		--no-build \
 		--package sphincs_plus \
 		--print-resource-usage \
@@ -67,3 +75,16 @@ sphincs-prove:
 sphincs-args:
 	cd packages/sphincs-plus/scripts && cargo +nightly run --release --example generate_cairo_data \
 		> ../tests/data/sha2_simple_128s.json
+
+sphincs-args-blake2s:
+	cd packages/sphincs-plus/scripts && cargo +nightly run --release --no-default-features \
+		--features "blake2s,sparse_addr,s128,simple" --example generate_cairo_data \
+		> ../tests/data/blake2s_simple_128s.json
+
+sphincs-test-blake2s:
+	cd packages/sphincs-plus/scripts && cargo +nightly test --no-default-features \
+		--features "blake2s,sparse_addr,s128,simple" --lib
+
+sphincs-verify-blake2s:
+	cd packages/sphincs-plus/scripts && cargo +nightly run --no-default-features \
+		--features "blake2s,sparse_addr,s128,simple" --example debug_signing
