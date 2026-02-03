@@ -161,7 +161,7 @@ pub fn crypto_sign_verify(sig: &[u8], msg: &[u8], pk: &[u8]) -> Result<(), SigEr
   // Derive the message digest and leaf index from R || PK || M.
   // The additional SPX_N is a result of the hash domain separator.
   hash_message(
-    &mut mhash, &mut tree, &mut idx_leaf, sig, 
+    &mut mhash, &mut tree, &mut idx_leaf, sig,
     pk, &msg, msg.len(), &ctx
   );
   idx += SPX_N;
@@ -191,18 +191,12 @@ pub fn crypto_sign_verify(sig: &[u8], msg: &[u8], pk: &[u8]) -> Result<(), SigEr
     // Compute the leaf node using the WOTS public key.
     thash::<SPX_WOTS_LEN>(&mut leaf, Some(&wots_pk), &ctx, &wots_pk_addr);
 
-    println!("wots addr: {:?}", wots_addr);
-
-    println!("wots leaf: {}", hex::encode(&leaf));
-
     // Compute the root node of this subtree.
     compute_root(
       &mut root, &leaf, idx_leaf, 0, &sig[idx..], 
       SPX_TREE_HEIGHT as u32, &ctx, &mut tree_addr
     );
     idx += SPX_TREE_HEIGHT * SPX_N;
-
-    println!("wots root: {}", hex::encode(&root));
 
     // Update the indices for the next layer.
     idx_leaf = (tree & ((1 << SPX_TREE_HEIGHT)-1)) as u32;

@@ -29,11 +29,6 @@ fn main(args: Args) {
     check_result(res);
 }
 
-#[cfg(feature: "blake_hash")]
-fn check_result(res: bool) { // TODO: generate a valid signature for blake_hash
-}
-
-#[cfg(not(feature: "blake_hash"))]
 fn check_result(res: bool) {
     assert(res, 'invalid signature');
 }

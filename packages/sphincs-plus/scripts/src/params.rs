@@ -22,7 +22,7 @@ pub const CRYPTO_SEEDBYTES: usize = 3*SPX_N;
 pub const SPX_WOTS_W: usize = 16;
 
 /// For clarity
-#[cfg(any(feature = "haraka", feature = "shake"))]
+#[cfg(feature = "shake")]
 pub const SPX_ADDR_BYTES: usize = 32;
 
 /// WOTS parameters.
@@ -51,10 +51,16 @@ pub const SPX_SK_BYTES: usize = 2 * SPX_N + SPX_PK_BYTES;
 
 // pub const WOTS_SIG_LEN: usize = SPX_TREE_HEIGHT * SPX_N + SPX_WOTS_BYTES;
 
+// These are used by sha2/shake hash_message, not by blake2s
+#[cfg(not(feature = "blake2s"))]
 pub const SPX_TREE_BITS: usize = SPX_TREE_HEIGHT * (SPX_D - 1);
+#[cfg(not(feature = "blake2s"))]
 pub const SPX_TREE_BYTES: usize = (SPX_TREE_BITS + 7) / 8;
+#[cfg(not(feature = "blake2s"))]
 pub const SPX_LEAF_BITS: usize = SPX_TREE_HEIGHT;
+#[cfg(not(feature = "blake2s"))]
 pub const SPX_LEAF_BYTES: usize = (SPX_LEAF_BITS + 7) / 8;
+#[cfg(not(feature = "blake2s"))]
 pub const SPX_DGST_BYTES: usize = SPX_FORS_MSG_BYTES + SPX_TREE_BYTES + SPX_LEAF_BYTES;
 
 pub const SPX_WOTS_LEN1: usize = 8 * SPX_N / SPX_WOTS_LOGW;
@@ -76,9 +82,9 @@ pub const SPX_WOTS_LEN2: usize = if SPX_WOTS_W == 256 {
   }
 };
 
-pub const HASH: &str = if cfg!(feature = "sha2") { "sha2" } 
-else if cfg!(feature = "shake") { "shake" } 
-else { "haraka" };
+pub const HASH: &str = if cfg!(feature = "sha2") { "sha2" }
+else if cfg!(feature = "shake") { "shake" }
+else { "blake2s" };
 
 pub const MODE: &str = if cfg!(feature = "s128") { "128s" }
 else if cfg!(feature = "f128") { "128f" } 

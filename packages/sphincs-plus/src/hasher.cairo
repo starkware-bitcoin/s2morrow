@@ -17,7 +17,7 @@ pub use blake2s::{
 pub use sha256::{HashState, hash_finalize, hash_init, hash_update, hash_update_block};
 
 // Imports.
-use crate::address::{Address, AddressTrait, AddressType};
+use crate::address::{Address, AddressTrait};
 use crate::params_128s::SPX_HASH_LEN;
 use crate::word_array::{WordArray, WordArrayTrait, WordSpan, WordSpanTrait};
 
@@ -110,6 +110,7 @@ pub fn thash_140(ctx: SpxCtx, address: @Address, mut data: Span<[u32; 4]>) -> Ha
     let [w0, w1] = (*block).unbox();
     let [d0, d1, d2, d3] = w0;
     let [d4, d5, d6, d7] = w1;
+
     hash_update_block(ref state, [a0, a1, a2, a3, a4, a5, a6, a7, d0, d1, d2, d3, d4, d5, d6, d7]);
 
     while let Some(block) = data.multi_pop_front::<4>() {
@@ -126,9 +127,11 @@ pub fn thash_140(ctx: SpxCtx, address: @Address, mut data: Span<[u32; 4]>) -> Ha
     let w0 = data.pop_front().unwrap();
     assert(data.is_empty(), 'thash_140: expected len = 35');
     let [d0, d1, d2, d3] = *w0;
+
     let [h0, h1, h2, h3, _, _, _, _] = hash_finalize_block(
         ref state, [d0, d1, d2, d3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     );
+
     [h0, h1, h2, h3]
 }
 
@@ -295,6 +298,7 @@ pub fn to_hex(data: Span<u32>) -> ByteArray {
 
 #[cfg(and(test, not(feature: "blake_hash")))]
 mod tests {
+    use crate::address::AddressType;
     use crate::word_array::hex::{words_from_hex, words_to_hex};
     use super::*;
 
@@ -403,5 +407,164 @@ mod tests {
             ),
         );
         assert_eq!(ctx.state_seeded.byte_len, 64);
+    }
+}
+
+#[cfg(and(test, feature: "blake_hash"))]
+mod blake_tests {
+    use super::*;
+
+    #[test]
+    fn test_initialize_hash_function_blake() {
+        // Test with known pk_seed
+        let pk_seed: [u32; 4] = [1350675573, 3521007802, 3973994890, 3022267814];
+        let ctx = initialize_hash_function(pk_seed);
+
+        // Blake2s produces different state than SHA256
+        // Expected state after compressing [pk_seed(4), zeros(12)] with Blake2s
+        assert_eq!(
+            ctx.state_seeded.h.unbox(),
+            [
+                2353511074,
+                2785205407,
+                1616039471,
+                3946058094,
+                220633588,
+                479096234,
+                421844601,
+                2930383070,
+            ],
+        );
+        assert_eq!(ctx.state_seeded.byte_len, 64);
+    }
+
+    #[test]
+    fn test_thash_4_blake() {
+        // Test thash_4 with known inputs and compare with Rust implementation
+        // pk_seed = [1350675573, 3521007802, 3973994890, 3022267814]
+        let pk_seed: [u32; 4] = [1350675573, 3521007802, 3973994890, 3022267814];
+        let ctx = initialize_hash_function(pk_seed);
+
+        // Address: all zeros
+        let addr: Address = Default::default();
+
+        // Data: [0x11111111, 0x22222222, 0x33333333, 0x44444444]
+        let data: [u32; 4] = [0x11111111, 0x22222222, 0x33333333, 0x44444444];
+
+        let result = thash_4(ctx, @addr, data);
+
+        // Expected from Rust: [240554214, 3442018119, 167305318, 1154638756]
+        assert_eq!(result, [240554214, 3442018119, 167305318, 1154638756]);
+    }
+
+    #[test]
+    fn test_thash_8_blake() {
+        // Test thash_8 with known inputs
+        let pk_seed: [u32; 4] = [1350675573, 3521007802, 3973994890, 3022267814];
+        let ctx = initialize_hash_function(pk_seed);
+
+        let addr: Address = Default::default();
+
+        // Data: two [u32; 4] blocks
+        let word0: [u32; 4] = [0x11111111, 0x22222222, 0x33333333, 0x44444444];
+        let word1: [u32; 4] = [0x55555555, 0x66666666, 0x77777777, 0x88888888];
+
+        let result = thash_8(ctx, @addr, word0, word1);
+
+        // Expected from Rust: [661977795, 3987191221, 830726983, 2429550160]
+        assert_eq!(result, [661977795, 3987191221, 830726983, 2429550160]);
+    }
+
+    #[test]
+    fn test_thash_140_blake() {
+        // Test thash_140 with known inputs to compare with Rust
+        // pk_seed = [1350675573, 3521007802, 3973994890, 3022267814]
+        let pk_seed: [u32; 4] = [1350675573, 3521007802, 3973994890, 3022267814];
+        let ctx = initialize_hash_function(pk_seed);
+
+        // Address with type = 1 (WOTSPK)
+        let mut addr: Address = Default::default();
+        addr.set_address_type(AddressType::WOTSPK);
+
+        // Data: 35 * [0x11111111, 0x22222222, 0x33333333, 0x44444444]
+        let pattern: [u32; 4] = [0x11111111, 0x22222222, 0x33333333, 0x44444444];
+        let data: [[u32; 4]; 35] = [
+            pattern, pattern, pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern, pattern, pattern,
+        ];
+
+        let result = thash_140(ctx, @addr, data.span());
+
+        // Expected from Rust: [1272083534, 3612199863, 2364651394, 4271845327]
+        assert_eq!(result, [1272083534, 3612199863, 2364651394, 4271845327]);
+    }
+
+    #[test]
+    fn test_seeded_state_for_verify_pk_seed() {
+        // Test seeded state for the pk_seed used in verification
+        // pk_seed = [606282273, 673654309, 741026345, 808398381]
+        let pk_seed: [u32; 4] = [606282273, 673654309, 741026345, 808398381];
+        let ctx = initialize_hash_function(pk_seed);
+
+        // Expected from Rust: h = [3395526082, 846969334, 2302489355, 1259298823, 4064129534, 1847701762, 3871428615, 2465737296]
+        assert_eq!(
+            ctx.state_seeded.h.unbox(),
+            [
+                3395526082,
+                846969334,
+                2302489355,
+                1259298823,
+                4064129534,
+                1847701762,
+                3871428615,
+                2465737296,
+            ],
+        );
+        assert_eq!(ctx.state_seeded.byte_len, 64);
+    }
+
+    #[test]
+    fn test_thash_140_with_verify_inputs() {
+        // Test thash_140 with exact inputs from failing verification
+        // pk_seed = [606282273, 673654309, 741026345, 808398381]
+        // wots_pk_addr = [0, 1283967, 2364146174, 1, 276, 0, 0, 0]
+        // wots_pk[0] = [503299354, 809686020, 357602580, 4001069262]
+        // wots_pk[1] = [4046437627, 3285514413, 1946914560, 3311158046]
+        // wots_pk[2] = [2003796110, 2018219647, 2678802938, 1012415054]
+        // Rust wots_leaf: [3692627733, 3515126182, 2847293917, 831339151]
+
+        let pk_seed: [u32; 4] = [606282273, 673654309, 741026345, 808398381];
+        let ctx = initialize_hash_function(pk_seed);
+
+        // Construct address
+        let mut addr: Address = Default::default();
+        addr.set_hypertree_addr(5514598638289406);  // tree_address from verify
+        addr.set_address_type(AddressType::WOTSPK);
+        addr.set_keypair(276);
+
+        // Use first 3 wots_pk entries (35 total needed)
+        // We'll use pattern data for the rest since we just need to match first few
+        let wots_pk_0: [u32; 4] = [503299354, 809686020, 357602580, 4001069262];
+        let wots_pk_1: [u32; 4] = [4046437627, 3285514413, 1946914560, 3311158046];
+        let wots_pk_2: [u32; 4] = [2003796110, 2018219647, 2678802938, 1012415054];
+        let pattern: [u32; 4] = [0, 0, 0, 0];  // Zero padding for rest
+
+        // Build wots_pk array (35 entries)
+        let wots_pk: [[u32; 4]; 35] = [
+            wots_pk_0, wots_pk_1, wots_pk_2, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern,
+            pattern, pattern, pattern, pattern, pattern,
+        ];
+
+        let _result = thash_140(ctx, @addr, wots_pk.span());
+        // This won't match Rust because we're using zeros for most of wots_pk
+        // But verifies the basic call works without panic
     }
 }

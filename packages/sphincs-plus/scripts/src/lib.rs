@@ -17,7 +17,7 @@
 //! 
 //! ```toml
 //! [dependencies]
-//! pqc_sphincsplus = {version = "0.1.0", features = ["haraka", "f128", "simple"]}
+//! pqc_sphincsplus = {version = "0.1.0", features = ["sha2", "f128", "simple"]}
 //! ```
 //! 
 //! To generate a keypair and sign a message with it:
@@ -44,9 +44,9 @@
 //! counterparts. This comes at the cost of a purely heuristic security argument.
 //! 
 //! * ### Hash
-//!   * `haraka`
 //!   * `sha2`
 //!   * `shake`
+//!   * `blake2s`
 //! 
 //! * ### Security Level
 //!   * `f128`
@@ -75,12 +75,12 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
-// Require one from each category 
+// Require one from each category
 #![cfg(all(
-  any(feature = "haraka", feature = "shake", feature = "sha2"),
+  any(feature = "shake", feature = "sha2", feature = "blake2s"),
   any(feature = "f128", feature = "f192", feature = "f256",
       feature = "s128", feature = "s192", feature = "s256"),
-  any(feature = "robust", feature = "simple") 
+  any(feature = "robust", feature = "simple")
 ))]
 
 // Ensure only one from each category
@@ -94,20 +94,20 @@ macro_rules! assert_unique_feature {
     assert_unique_feature!($($rest),*);
   }
 }
-assert_unique_feature!("haraka", "shake", "sha2");
+assert_unique_feature!("shake", "sha2", "blake2s");
 assert_unique_feature!("f128", "f192", "f256","s128", "s192", "s256");
 assert_unique_feature!("robust", "simple");
 
 mod api;
 mod address;
-mod context;
+pub mod context;
 mod fors;
 mod hash;
 mod merkle;
 mod offsets;
 mod params;
 mod sign;
-mod thash;
+pub mod thash;
 mod utils;
 mod utilsx1;
 mod wots;
@@ -116,11 +116,11 @@ mod randombytes;
 
 pub use api::*;
 
-#[cfg(feature = "sha2")] 
+#[cfg(feature = "sha2")]
 mod sha2;
 
-#[cfg(feature = "haraka")] 
-mod haraka;
+#[cfg(feature = "blake2s")]
+pub mod blake2s;
 
 // Known Answer Tests
 #[cfg(feature = "KAT")]

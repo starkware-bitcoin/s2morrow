@@ -48,6 +48,7 @@ pub fn fors_gen_leafx1(
 /// Interprets m as SPX_FORS_HEIGHT-bit unsigned integers.
 /// Assumes m contains at least SPX_FORS_HEIGHT * SPX_FORS_TREES bits.
 /// Assumes indices has space for SPX_FORS_TREES integers.
+#[cfg(not(feature = "blake2s"))]
 pub fn message_to_indices(indices: &mut[u32], m: &[u8])
 {
   let mut offset = 0;
@@ -59,6 +60,73 @@ pub fn message_to_indices(indices: &mut[u32], m: &[u8])
       offset += 1;
     }
   }
+}
+
+/// Cairo-compatible message_to_indices for Blake2s mode.
+/// Processes mhash as u32 words with big-endian byte order within each word,
+/// matching Cairo's message_to_indices_128s.
+#[cfg(feature = "blake2s")]
+pub fn message_to_indices(indices: &mut[u32], m: &[u8])
+{
+    let mut idx = 0;
+    let mut acc: u32 = 0;
+    let mut acc_bits: u32 = 0;
+
+    // Process 5 full words (20 bytes) + 1 byte
+    let num_full_words = SPX_FORS_MSG_BYTES / 4;  // 5 for 21 bytes
+    let remaining_bytes = SPX_FORS_MSG_BYTES % 4;  // 1 for 21 bytes
+
+    for word_idx in 0..num_full_words {
+        // Read word as little-endian (how it's stored in memory)
+        // then interpret bytes in big-endian order (how Cairo does it)
+        let word = u32::from_le_bytes(m[word_idx*4..word_idx*4+4].try_into().unwrap());
+
+        // Decompose word into bytes in big-endian order: [ab, cd, ef, gh]
+        let ab = (word >> 24) & 0xFF;
+        let cd = (word >> 16) & 0xFF;
+        let ef = (word >> 8) & 0xFF;
+        let gh = word & 0xFF;
+
+        if acc_bits == 0 {
+            // Pattern: [dab efc, gh]
+            let c = cd >> 4;
+            let d = cd & 0xF;
+            indices[idx] = d * 0x100 + ab; idx += 1;
+            indices[idx] = ef * 0x10 + c; idx += 1;
+            acc = gh;
+            acc_bits = 8;
+        } else if acc_bits == 8 {
+            // Pattern: [bxx cda hef, g]
+            let a = ab >> 4;
+            let b = ab & 0xF;
+            let g = gh >> 4;
+            let h = gh & 0xF;
+            indices[idx] = b * 0x100 + acc; idx += 1;
+            indices[idx] = cd * 0x10 + a; idx += 1;
+            indices[idx] = h * 0x100 + ef; idx += 1;
+            acc = g;
+            acc_bits = 4;
+        } else if acc_bits == 4 {
+            // Pattern: [abx fcd ghe]
+            let e = ef >> 4;
+            let f = ef & 0xF;
+            indices[idx] = ab * 0x10 + acc; idx += 1;
+            indices[idx] = f * 0x100 + cd; idx += 1;
+            indices[idx] = gh * 0x10 + e; idx += 1;
+            acc = 0;
+            acc_bits = 0;
+        }
+    }
+
+    // Process remaining byte(s)
+    if remaining_bytes == 1 {
+        // The mhash is now constructed correctly in hash_message:
+        // m[20] contains the MSB of word[5] from the original hash output
+        let last_byte = m[num_full_words * 4] as u32;  // m[20]
+
+        assert_eq!(acc_bits, 4);
+        indices[idx] = last_byte * 0x10 + acc;
+    }
 }
 
 /// Signs a message m, deriving the secret key from sk_seed and the FTS address.
@@ -138,33 +206,30 @@ pub fn fors_pk_from_sig(
       set_tree_height(&mut fors_tree_addr, 0);
       set_tree_index(&mut fors_tree_addr, indices[i] + idx_offset);
 
-      // Derive the leaf from the included secret key part. 
+      // Derive the leaf from the included secret key part.
       fors_sk_to_leaf(&mut leaf, &sig[idx..], ctx, &mut fors_tree_addr);
       idx += SPX_N;
 
-      // Derive the corresponding root node of this tree. 
+      // Derive the corresponding root node of this tree.
       compute_root(
         &mut roots[i*SPX_N..], &leaf, indices[i], idx_offset,
         &sig[idx..], SPX_FORS_HEIGHT as u32, ctx, &mut fors_tree_addr
       );
+
       idx += SPX_N * SPX_FORS_HEIGHT;
   }
 
-  // Hash horizontally across all tree roots to derive the public key. 
+  // Hash horizontally across all tree roots to derive the public key.
   thash::<SPX_FORS_TREES>(pk, Some(&roots), ctx, &fors_pk_addr);
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  
+
   #[test]
   fn test_fors_sk_to_leaf() {
-    let ctx = SpxCtx {
-      pub_seed: [0u8; SPX_N],
-      sk_seed: [0u8; SPX_N],
-      state_seeded: [0u8; 40],
-    };
+    let ctx = SpxCtx::default();
     let sk = hex::decode("d17096522c1d9de4e3c4c4e8659c1b86").unwrap();
     let mut fors_leaf_addr = [12061, 501484376, 3892510720, 33095680, 0, 3662217216, 0, 0];
     let mut leaf = [0u8; SPX_N];

@@ -29,6 +29,15 @@ pub fn keypair() -> Keypair
   Keypair { public, secret }
 }
 
+/// Generates a keypair from a deterministic seed
+pub fn keypair_from_seed(seed: &[u8]) -> Keypair
+{
+  let mut public = [0u8; CRYPTO_PUBLICKEYBYTES];
+  let mut secret = [0u8; CRYPTO_SECRETKEYBYTES];
+  crypto_sign_keypair(&mut public, &mut secret, Some(seed));
+  Keypair { public, secret }
+}
+
 /// Generates a signature for the given message using a keypair
 /// 
 /// Example: 

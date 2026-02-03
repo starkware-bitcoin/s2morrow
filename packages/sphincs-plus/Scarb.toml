@@ -17,3 +17,4 @@ cairo_test = "2.11.4"
 default = []
 blake_hash = []
 sparse_addr = []
+debug = []
