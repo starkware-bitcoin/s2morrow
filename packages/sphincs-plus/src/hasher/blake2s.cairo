@@ -41,7 +41,7 @@ pub fn hash_finalize_block(ref state: HashState, data: [u32; 16]) -> [u32; 8] {
 pub fn hash_update(ref state: HashState, mut data: Span<u32>) {
     while let Some(chunk) = data.multi_pop_front::<16>() {
         state.byte_len += 64;
-        blake2s_compress(state.h, state.byte_len, *chunk);
+        state.h = blake2s_compress(state.h, state.byte_len, *chunk);
     }
     assert(data.is_empty(), 'unaligned blake2s block');
 }
@@ -54,7 +54,7 @@ pub fn hash_finalize(
 
     while let Some(chunk) = data.multi_pop_front::<16>() {
         state.byte_len += 64;
-        blake2s_compress(state.h, state.byte_len, *chunk);
+        state.h = blake2s_compress(state.h, state.byte_len, *chunk);
     }
 
     let mut buffer: Array<u32> = array![];
